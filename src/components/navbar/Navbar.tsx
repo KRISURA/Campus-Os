@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import type { UserRole } from '../../types';
 import { 
   Building2, GraduationCap, Users, Sparkles, PlayCircle, Calendar,
-  Database, Share2, DollarSign, Trophy, LogOut, Menu, X, ShieldCheck
+  Database, Share2, DollarSign, Trophy, LogOut, Menu, X, ShieldCheck, Image as ImageIcon
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -36,8 +36,13 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'graph', label: 'Graph', icon: <Share2 className="w-3.5 h-3.5" />, color: 'text-cyan-400', activeColor: 'bg-cyan-600' },
 ];
 
+const PROSPECT_STUDENT_NAV_ITEMS: NavItem[] = [
+  { id: 'portal', label: 'College Campus Photos', icon: <ImageIcon className="w-3.5 h-3.5" />, color: 'text-blue-400', activeColor: 'bg-blue-600' },
+  { id: 'clubs', label: 'Clubs', icon: <Users className="w-3.5 h-3.5" />, color: 'text-emerald-400', activeColor: 'bg-emerald-600' },
+];
+
 const ROLE_LABELS: Record<UserRole, string> = {
-  public: 'Visitor',
+  public: 'Prospective Student',
   student: 'Student',
   club_coordinator: 'Coordinator',
   faculty: 'Faculty',
@@ -57,10 +62,16 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // Prospective Student gets only College Campus Photos and Clubs tabs
+  const currentNavItems = activeRole === 'public' ? PROSPECT_STUDENT_NAV_ITEMS : NAV_ITEMS;
+
   const handleNavClick = (item: NavItem) => {
     setActiveView(item.id);
-    if (item.role) setActiveRole(item.role);
-    else if (item.id === 'portal' && activeRole === 'admin') setActiveRole('public');
+    if (activeRole !== 'public' && item.role) {
+      setActiveRole(item.role);
+    } else if (item.id === 'portal' && activeRole === 'admin') {
+      setActiveRole('public');
+    }
     setMobileMenuOpen(false);
   };
 
@@ -83,7 +94,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Center: Nav Tabs (Desktop) */}
           <nav className="hidden lg:flex items-center gap-0.5 bg-white/[0.03] p-1 rounded-2xl border border-white/[0.06]">
-            {NAV_ITEMS.map((item) => {
+            {currentNavItems.map((item) => {
               const isActive = activeView === item.id;
               return (
                 <button
@@ -146,7 +157,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Mobile Nav Dropdown */}
         {mobileMenuOpen && (
           <div className="lg:hidden pb-4 pt-2 space-y-1 animate-slide-up border-t border-white/[0.06] mt-2">
-            {NAV_ITEMS.map((item) => {
+            {currentNavItems.map((item) => {
               const isActive = activeView === item.id;
               return (
                 <button

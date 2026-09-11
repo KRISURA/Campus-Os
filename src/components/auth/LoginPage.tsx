@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import type { UserRole } from '../../types';
-import { 
-  Sparkles, Eye, EyeOff, ArrowRight, Building2, GraduationCap, 
-  Users, ShieldCheck, BookOpen, Zap, Lock, Mail, ChevronRight
+import {
+  Sparkles, Eye, EyeOff, ArrowRight, Building2, GraduationCap,
+  Users, ShieldCheck, BookOpen, Zap, Lock, Mail, ChevronRight, UserPlus
 } from 'lucide-react';
+import { loginWithEmail, registerWithEmail, detectRoleFromEmail } from '../../services/authService';
 
 interface LoginPageProps {
   onLogin: (role: UserRole) => void;
@@ -16,7 +17,7 @@ const ROLE_CARDS: Array<{
   icon: React.ReactNode;
   gradient: string;
   glowColor: string;
-  credentials: { email: string; password: string };
+  demoEmail: string;
 }> = [
   {
     role: 'public',
@@ -25,7 +26,7 @@ const ROLE_CARDS: Array<{
     icon: <Building2 className="w-6 h-6" />,
     gradient: 'from-blue-500 to-cyan-500',
     glowColor: 'rgba(59, 130, 246, 0.15)',
-    credentials: { email: 'visitor@campus.edu', password: 'demo' },
+    demoEmail: 'visitor@campus.edu',
   },
   {
     role: 'student',
@@ -34,7 +35,7 @@ const ROLE_CARDS: Array<{
     icon: <GraduationCap className="w-6 h-6" />,
     gradient: 'from-indigo-500 to-violet-500',
     glowColor: 'rgba(99, 102, 241, 0.15)',
-    credentials: { email: 'priya.sharma@campus.edu', password: 'demo' },
+    demoEmail: 'student@campus.edu',
   },
   {
     role: 'club_coordinator',
@@ -43,7 +44,7 @@ const ROLE_CARDS: Array<{
     icon: <Users className="w-6 h-6" />,
     gradient: 'from-emerald-500 to-teal-500',
     glowColor: 'rgba(16, 185, 129, 0.15)',
-    credentials: { email: 'coordinator@campus.edu', password: 'demo' },
+    demoEmail: 'coordinator@campus.edu',
   },
   {
     role: 'faculty',
@@ -52,7 +53,7 @@ const ROLE_CARDS: Array<{
     icon: <BookOpen className="w-6 h-6" />,
     gradient: 'from-amber-500 to-orange-500',
     glowColor: 'rgba(245, 158, 11, 0.15)',
-    credentials: { email: 'faculty@campus.edu', password: 'demo' },
+    demoEmail: 'faculty@campus.edu',
   },
   {
     role: 'admin',
@@ -61,60 +62,71 @@ const ROLE_CARDS: Array<{
     icon: <ShieldCheck className="w-6 h-6" />,
     gradient: 'from-rose-500 to-pink-500',
     glowColor: 'rgba(244, 63, 94, 0.15)',
-    credentials: { email: 'admin@campus.edu', password: 'demo' },
+    demoEmail: 'admin@campus.edu',
   },
 ];
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
-  const [selectedRole, setSelectedRole] = useState<number | null>(null);
+  const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [loginError, setLoginError] = useState('');
 
-  const handleRoleSelect = (index: number) => {
-    setSelectedRole(index);
-    setEmail(ROLE_CARDS[index].credentials.email);
-    setPassword(ROLE_CARDS[index].credentials.password);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password) {
+      setLoginError('Please enter your email and password.');
+      return;
+    }
+    setIsLoading(true);
+    setLoginError('');
+    try {
+      if (mode === 'login') {
+        const { role } = await loginWithEmail(email, password);
+        onLogin(role);
+      } else {
+        const { role } = await registerWithEmail(email, password);
+        onLogin(role);
+      }
+    } catch (err: unknown) {
+      const error = err as { code?: string; message?: string };
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        setLoginError('Invalid email or password. Please try again.');
+      } else if (error.code === 'auth/email-already-in-use') {
+        setLoginError('This email is already registered. Please sign in.');
+      } else if (error.code === 'auth/weak-password') {
+        setLoginError('Password must be at least 6 characters.');
+      } else if (error.code === 'auth/invalid-email') {
+        setLoginError('Please enter a valid email address.');
+      } else {
+        setLoginError(error.message ?? 'Something went wrong. Please try again.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRoleCardClick = (demoEmail: string) => {
+    setEmail(demoEmail);
+    setPassword('demo123');
     setLoginError('');
   };
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (selectedRole === null) {
-      setLoginError('Please select a role to continue');
-      return;
-    }
-    setIsLoggingIn(true);
-    setTimeout(() => {
-      onLogin(ROLE_CARDS[selectedRole].role);
-    }, 800);
-  };
-
-  const handleQuickLogin = (role: UserRole) => {
-    setIsLoggingIn(true);
-    setTimeout(() => {
-      onLogin(role);
-    }, 600);
-  };
+  const detectedRole = email ? detectRoleFromEmail(email) : null;
 
   return (
     <div className="min-h-screen relative overflow-hidden bg-grid-pattern" style={{ backgroundColor: '#050816' }}>
-      
+
       {/* Animated Background Orbs */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        {/* Large primary orb */}
-        <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] rounded-full animate-float" 
+        <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] rounded-full animate-float"
           style={{ background: 'radial-gradient(circle, rgba(99, 102, 241, 0.08) 0%, transparent 70%)' }} />
-        {/* Secondary orb */}
-        <div className="absolute bottom-1/4 right-1/4 w-[600px] h-[600px] rounded-full animate-float-delayed" 
+        <div className="absolute bottom-1/4 right-1/4 w-[600px] h-[600px] rounded-full animate-float-delayed"
           style={{ background: 'radial-gradient(circle, rgba(139, 92, 246, 0.06) 0%, transparent 70%)' }} />
-        {/* Accent orb */}
         <div className="absolute top-1/2 right-1/3 w-[300px] h-[300px] rounded-full animate-float-slow"
           style={{ background: 'radial-gradient(circle, rgba(6, 182, 212, 0.05) 0%, transparent 70%)' }} />
-        
-        {/* Orbiting particles */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
           <div className="animate-orbit">
             <div className="w-2 h-2 rounded-full bg-indigo-500/30 blur-[1px]" />
@@ -125,8 +137,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             <div className="w-1.5 h-1.5 rounded-full bg-violet-500/25 blur-[1px]" />
           </div>
         </div>
-
-        {/* Grid fade overlay */}
         <div className="absolute inset-0 bg-radial-fade" />
       </div>
 
@@ -157,10 +167,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           </div>
         </header>
 
-        {/* Main Login Content */}
+        {/* Main Content */}
         <main className="flex-1 flex items-center justify-center px-4 py-8 lg:py-0">
           <div className="w-full max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
-            
+
             {/* Left Column — Hero */}
             <div className="space-y-8 animate-slide-up">
               <div className="space-y-5">
@@ -170,7 +180,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                   <span className="gradient-text">Entire Campus.</span>
                 </h1>
                 <p className="text-base md:text-lg text-slate-400 leading-relaxed max-w-md font-light">
-                  AI-powered institutional intelligence connecting students, clubs, academics, 
+                  AI-powered institutional intelligence connecting students, clubs, academics,
                   and administration in a single living ecosystem.
                 </p>
               </div>
@@ -190,92 +200,116 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                 ))}
               </div>
 
-              {/* Stats row */}
-              <div className="flex items-center gap-8 pt-4">
-                {[
-                  { value: '30+', label: 'Active Clubs' },
-                  { value: '100+', label: 'Annual Events' },
-                  { value: '5K+', label: 'Students' },
-                ].map((stat, i) => (
-                  <div key={i}>
-                    <div className="text-2xl font-black text-white">{stat.value}</div>
-                    <div className="text-[11px] text-slate-500 font-medium uppercase tracking-wider">{stat.label}</div>
-                  </div>
-                ))}
+              {/* Role hint cards */}
+              <div className="space-y-2">
+                <p className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider">Quick Fill — Click a role to auto-fill email</p>
+                <div className="grid grid-cols-1 gap-1.5">
+                  {ROLE_CARDS.map((card) => (
+                    <button
+                      key={card.role}
+                      type="button"
+                      onClick={() => handleRoleCardClick(card.demoEmail)}
+                      className={`group w-full text-left px-3 py-2.5 rounded-xl border transition-all duration-200 flex items-center gap-3 ${
+                        detectedRole === card.role
+                          ? 'border-indigo-500/40 bg-indigo-500/[0.08]'
+                          : 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/[0.1]'
+                      }`}
+                    >
+                      <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${card.gradient} flex items-center justify-center text-white flex-shrink-0`}>
+                        {card.icon}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-xs text-white">{card.label}</div>
+                        <div className="text-[10px] text-slate-500 truncate">{card.demoEmail}</div>
+                      </div>
+                      {detectedRole === card.role && (
+                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 flex-shrink-0" />
+                      )}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
-            {/* Right Column — Login Card */}
+            {/* Right Column — Auth Card */}
             <div className="animate-slide-up" style={{ animationDelay: '0.15s' }}>
-              <div className="glass-panel rounded-3xl p-8 space-y-7 relative overflow-hidden">
+              <div className="glass-panel rounded-3xl p-8 space-y-6 relative overflow-hidden">
                 {/* Decorative top glow */}
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-1 rounded-b-full gradient-bg opacity-60" />
 
-                <div className="space-y-2">
-                  <h2 className="text-xl font-bold text-white">Sign in to CampusOS</h2>
-                  <p className="text-sm text-slate-400">Select your role and sign in to access the platform.</p>
+                {/* Mode Toggle */}
+                <div className="flex items-center bg-white/[0.03] rounded-2xl p-1 border border-white/[0.06]">
+                  <button
+                    type="button"
+                    onClick={() => { setMode('login'); setLoginError(''); }}
+                    className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
+                      mode === 'login' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Sign In
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setMode('register'); setLoginError(''); }}
+                    className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
+                      mode === 'register' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Create Account
+                  </button>
                 </div>
 
-                {/* Role Selector Grid */}
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Select Role</label>
-                  <div className="grid grid-cols-1 gap-2">
-                    {ROLE_CARDS.map((card, idx) => (
-                      <button
-                        key={card.role}
-                        onClick={() => handleRoleSelect(idx)}
-                        className={`group relative w-full text-left px-4 py-3 rounded-2xl border transition-all duration-300 flex items-center gap-3 ${
-                          selectedRole === idx
-                            ? 'border-indigo-500/40 bg-indigo-500/[0.08]'
-                            : 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/[0.1]'
-                        }`}
-                        style={selectedRole === idx ? { boxShadow: `0 0 30px -10px ${card.glowColor}` } : undefined}
-                      >
-                        <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${card.gradient} flex items-center justify-center text-white shadow-lg flex-shrink-0`}
-                          style={{ boxShadow: `0 4px 15px -3px ${card.glowColor}` }}>
-                          {card.icon}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="font-semibold text-sm text-white">{card.label}</div>
-                          <div className="text-[11px] text-slate-500 truncate">{card.description}</div>
-                        </div>
-                        {selectedRole === idx ? (
-                          <div className="w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center flex-shrink-0">
-                            <div className="w-2 h-2 rounded-full bg-white" />
-                          </div>
-                        ) : (
-                          <div className="w-5 h-5 rounded-full border border-slate-700 flex-shrink-0" />
-                        )}
-                      </button>
-                    ))}
+                <div className="space-y-1">
+                  <h2 className="text-xl font-bold text-white">
+                    {mode === 'login' ? 'Welcome back!' : 'Join CampusOS'}
+                  </h2>
+                  <p className="text-sm text-slate-400">
+                    {mode === 'login'
+                      ? 'Sign in to your institution account.'
+                      : 'Create your account to get started.'}
+                  </p>
+                </div>
+
+                {/* Detected Role Badge */}
+                {detectedRole && (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20">
+                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
+                    <span className="text-xs text-indigo-300 font-medium">
+                      Role detected: <span className="font-bold capitalize">{detectedRole.replace('_', ' ')}</span>
+                    </span>
                   </div>
-                </div>
+                )}
 
-                {/* Login Form */}
-                <form onSubmit={handleLogin} className="space-y-4">
+                {/* Auth Form */}
+                <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Email</label>
                     <div className="relative">
-                      <Mail className="w-4 h-4 text-slate-500 absolute left-4 top-1/2 -translate-y-1/2" />
+                      <Mail className="w-4 h-4 text-slate-500 absolute left-4 top-1/2 -translate-y-1/2 z-10 pointer-events-none" />
                       <input
                         type="email"
                         value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        onChange={(e) => { setEmail(e.target.value); setLoginError(''); }}
                         placeholder="your.email@campus.edu"
-                        className="input-field pl-11"
+                        className="input-field pr-4"
+                        style={{ paddingLeft: '2.75rem' }}
+                        required
                       />
                     </div>
                   </div>
+
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Password</label>
                     <div className="relative">
-                      <Lock className="w-4 h-4 text-slate-500 absolute left-4 top-1/2 -translate-y-1/2" />
+                      <Lock className="w-4 h-4 text-slate-500 absolute left-4 top-1/2 -translate-y-1/2 z-10 pointer-events-none" />
                       <input
                         type={showPassword ? 'text' : 'password'}
                         value={password}
-                        onChange={(e) => setPassword(e.target.value)}
+                        onChange={(e) => { setPassword(e.target.value); setLoginError(''); }}
                         placeholder="••••••••"
-                        className="input-field pl-11 pr-11"
+                        className="input-field pr-11"
+                        style={{ paddingLeft: '2.75rem' }}
+                        required
                       />
                       <button
                         type="button"
@@ -285,6 +319,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                         {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
                     </div>
+                    {mode === 'register' && (
+                      <p className="text-[10px] text-slate-600">Minimum 6 characters required.</p>
+                    )}
                   </div>
 
                   {loginError && (
@@ -295,33 +332,37 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
                   <button
                     type="submit"
-                    disabled={isLoggingIn}
+                    disabled={isLoading}
                     className={`btn-primary w-full flex items-center justify-center gap-2 ${
-                      isLoggingIn ? 'opacity-70 cursor-not-allowed' : ''
+                      isLoading ? 'opacity-70 cursor-not-allowed' : ''
                     }`}
                   >
-                    {isLoggingIn ? (
+                    {isLoading ? (
                       <>
                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        Authenticating...
+                        {mode === 'login' ? 'Signing in...' : 'Creating account...'}
                       </>
                     ) : (
                       <>
-                        Sign In <ArrowRight className="w-4 h-4" />
+                        {mode === 'login'
+                          ? <><ArrowRight className="w-4 h-4" /> Sign In</>
+                          : <><UserPlus className="w-4 h-4" /> Create Account</>
+                        }
                       </>
                     )}
                   </button>
                 </form>
 
-                {/* Quick Access */}
+                {/* Quick Demo Access */}
                 <div className="pt-2 border-t border-white/[0.06]">
                   <div className="text-[11px] text-slate-500 text-center mb-3 font-medium">Quick Demo Access</div>
                   <div className="flex items-center justify-center gap-2 flex-wrap">
                     {ROLE_CARDS.map((card) => (
                       <button
                         key={card.role}
-                        onClick={() => handleQuickLogin(card.role)}
-                        className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold text-slate-400 hover:text-white bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] hover:border-white/[0.1] transition-all flex items-center gap-1`}
+                        type="button"
+                        onClick={() => handleRoleCardClick(card.demoEmail)}
+                        className="px-3 py-1.5 rounded-lg text-[11px] font-semibold text-slate-400 hover:text-white bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] hover:border-white/[0.1] transition-all flex items-center gap-1"
                       >
                         {card.label.split(' ')[0]} <ChevronRight className="w-3 h-3" />
                       </button>
@@ -330,15 +371,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                 </div>
               </div>
 
-              {/* Footer note */}
               <div className="text-center mt-4 text-[11px] text-slate-600">
-                This is a prototype. All credentials are pre-filled for demo purposes.
+                Secured by Firebase Authentication • CampusOS v2.0
               </div>
             </div>
           </div>
         </main>
 
-        {/* Bottom Bar */}
+        {/* Footer */}
         <footer className="px-6 lg:px-12 py-5 flex items-center justify-between text-[11px] text-slate-600 animate-fade-in">
           <span>© 2026 CampusOS • Built for Higher Education</span>
           <div className="hidden md:flex items-center gap-4">

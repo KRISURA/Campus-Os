@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { LoginPage } from './components/auth/LoginPage';
 import { Navbar } from './components/navbar/Navbar';
 import { PublicPortal } from './components/public/PublicPortal';
@@ -17,10 +17,12 @@ import { DemoGuideModal } from './components/demo/DemoGuideModal';
 import type { UserRole, CampusEvent } from './types';
 import { MOCK_EVENTS, CURRENT_STUDENT } from './data/mockData';
 import { CheckCircle2 } from 'lucide-react';
+import { onAuthStateChange, logout } from './services/authService';
 
 export function App() {
   // Auth State
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
   
   const [activeRole, setActiveRole] = useState<UserRole>('public');
   const [activeView, setActiveView] = useState<string>('portal');
@@ -39,6 +41,29 @@ export function App() {
   const [currentDemoStep, setCurrentDemoStep] = useState<number>(1);
   const [eventsList, setEventsList] = useState<CampusEvent[]>(MOCK_EVENTS);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // ─── Firebase Auth State Listener ─────────────────────────────
+  useEffect(() => {
+    const unsubscribe = onAuthStateChange((user, role) => {
+      if (user && role) {
+        setActiveRole(role);
+        setIsAuthenticated(true);
+        // Set default view based on role
+        switch (role) {
+          case 'student': setActiveView('student'); break;
+          case 'club_coordinator': setActiveView('clubs'); break;
+          case 'admin': setActiveView('admin-finance'); break;
+          case 'faculty': setActiveView('faculty'); break;
+          default: setActiveView('portal');
+        }
+      } else {
+        setIsAuthenticated(false);
+        setActiveRole('public');
+      }
+      setIsAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -67,7 +92,8 @@ export function App() {
     setIsAuthenticated(true);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await logout();
     setIsAuthenticated(false);
     setActiveRole('public');
     setActiveView('portal');
@@ -134,6 +160,21 @@ export function App() {
 
   const selectedEvent = eventsList.find(e => e.id === selectedEventId) || null;
 
+  // ─── LOADING STATE ─────────────────────────────────────────
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#050816' }}>
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl gradient-bg flex items-center justify-center text-white font-black text-xl shadow-lg shadow-indigo-500/20">
+            C
+          </div>
+          <div className="w-6 h-6 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
+          <p className="text-xs text-slate-500">Loading CampusOS...</p>
+        </div>
+      </div>
+    );
+  }
+
   // ─── SHOW LOGIN PAGE IF NOT AUTHENTICATED ─────────────────
   if (!isAuthenticated) {
     return <LoginPage onLogin={handleLogin} />;
@@ -156,8 +197,30 @@ export function App() {
       {/* Main Content View Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 lg:px-8 pt-8 pb-12 relative z-10">
         <div key={activeView} className="page-transition">
-          {activeView === 'portal' && (
+          {/* Prospective Student Views */}
+          {activeRole === 'public' && activeView === 'portal' && (
             <PublicPortal
+              viewMode="photos"
+              onSelectClub={handleSelectClub}
+              onSelectEvent={handleSelectEvent}
+              onOpenAIAgent={() => setIsAIAgentOpen(true)}
+              onNavigateToClubs={() => setActiveView('clubs')}
+            />
+          )}
+
+          {activeRole === 'public' && activeView === 'clubs' && (
+            <PublicPortal
+              viewMode="clubs"
+              onSelectClub={handleSelectClub}
+              onSelectEvent={handleSelectEvent}
+              onOpenAIAgent={() => setIsAIAgentOpen(true)}
+            />
+          )}
+
+          {/* Other Roles Views */}
+          {activeRole !== 'public' && activeView === 'portal' && (
+            <PublicPortal
+              viewMode="all"
               onSelectClub={handleSelectClub}
               onSelectEvent={handleSelectEvent}
               onOpenAIAgent={() => setIsAIAgentOpen(true)}
@@ -173,14 +236,14 @@ export function App() {
             />
           )}
 
-          {activeView === 'clubs' && (
+          {activeRole !== 'public' && activeView === 'clubs' && (
             <ClubManagement onOpenAIAgent={() => setIsAIAgentOpen(true)} />
           )}
 
           {activeView === 'club-detail' && selectedClubId && (
             <ClubDetailPage 
               clubId={selectedClubId} 
-              onBack={() => setActiveView(activeRole === 'public' ? 'portal' : 'clubs')}
+              onBack={() => setActiveView(activeRole === 'public' ? 'clubs' : 'clubs')}
               onSelectEvent={handleSelectEvent}
             />
           )}
